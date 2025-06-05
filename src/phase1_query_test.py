@@ -7,21 +7,27 @@ import asyncio
 import aiohttp
 import sys
 import traceback
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, NamedTuple
 from pathlib import Path
 import json
 
 # プロジェクトのsrcディレクトリをパスに追加
 sys.path.append(str(Path(__file__).parent))
 
-from logger_config import get_logger
-from utils import ConfigManager, BlacklistChecker
-from search_agent import BraveSearchAgent, CompanyInfo, QueryPattern
-from data_loader import DataLoader, SheetConfig, create_data_loader_from_config
-from output_writer import OutputWriter, create_output_writer_from_config
-from scorer import HPScorer, create_scorer_from_config
+from .logger_config import get_logger
+from .utils import ConfigManager, BlacklistChecker
+from .search_agent import BraveSearchClient, CompanyInfo, QueryGenerator, SearchAgent
+from .data_loader import DataLoader, SheetConfig, create_data_loader_from_config
+from .output_writer import OutputWriter, create_output_writer_from_config
+from .scorer import HPScorer, create_scorer_from_config
 
 logger = get_logger(__name__)
+
+class QueryPattern(NamedTuple):
+    """クエリパターンを表すデータクラス"""
+    name: str
+    template: str
+    description: str
 
 class Phase1QueryTester:
     """フェーズ1クエリテスタークラス"""
@@ -32,7 +38,17 @@ class Phase1QueryTester:
         
         # 各コンポーネントを初期化
         self.blacklist_checker = BlacklistChecker(config)
-        self.search_agent = BraveSearchAgent(config, self.blacklist_checker)
+        
+        # Brave Search Client の初期化
+        brave_api_config = config.get('brave_api', {})
+        self.brave_client = BraveSearchClient(
+            api_key=brave_api_config.get('api_key'),
+            results_per_query=brave_api_config.get('results_per_query', 10)
+        )
+        
+        # Search Agent の初期化
+        self.search_agent = SearchAgent(self.brave_client)
+        
         self.data_loader = create_data_loader_from_config(config)
         self.output_writer = create_output_writer_from_config(config)
         self.scorer = create_scorer_from_config(config, self.blacklist_checker)
@@ -92,15 +108,14 @@ class Phase1QueryTester:
             # 各企業に対してクエリテスト実行
             test_results = []
             
-            async with aiohttp.ClientSession() as session:
-                for i, company in enumerate(companies):
-                    logger.info(f"--- 企業 {i+1}/{len(companies)}: {company.company_name} ({company.id}) ---")
-                    
-                    company_result = await self._test_company_queries(company, session)
-                    test_results.append(company_result)
-                    
-                    # 適度な間隔を置く
-                    await asyncio.sleep(0.5)
+            for i, company in enumerate(companies):
+                logger.info(f"--- 企業 {i+1}/{len(companies)}: {company.company_name} ({company.id}) ---")
+                
+                company_result = await self._test_company_queries(company)
+                test_results.append(company_result)
+                
+                # 適度な間隔を置く
+                await asyncio.sleep(0.5)
             
             # 結果サマリー生成
             summary = self._generate_test_summary(test_results)
@@ -155,9 +170,7 @@ class Phase1QueryTester:
             logger.error(f"企業データ読み込みエラー: {e}")
             return []
     
-    async def _test_company_queries(self, 
-                                  company: CompanyInfo,
-                                  session: aiohttp.ClientSession) -> Dict[str, Any]:
+    async def _test_company_queries(self, company: CompanyInfo) -> Dict[str, Any]:
         """1企業に対する全クエリテスト"""
         try:
             company_result = {
@@ -178,15 +191,18 @@ class Phase1QueryTester:
                 logger.info(f"  クエリパターン: {pattern.name}")
                 
                 try:
+                    # クエリ生成
+                    query_text = QueryGenerator.generate_custom_query(pattern.template, company)
+                    logger.info(f"  生成クエリ: {query_text}")
+                    
                     # 検索実行
-                    search_results = await self.search_agent.search_company_hp(
-                        company, pattern, session
-                    )
+                    search_results = self.brave_client.search(query_text)
                     
                     if not search_results:
                         logger.warning(f"  検索結果なし: {pattern.name}")
                         company_result["query_results"].append({
                             "pattern": pattern._asdict(),
+                            "query_text": query_text,
                             "search_results_count": 0,
                             "scored_urls": [],
                             "best_url": None,
@@ -196,32 +212,36 @@ class Phase1QueryTester:
                     
                     logger.info(f"  検索結果: {len(search_results)}件")
                     
-                    # スコアリング実行
-                    scored_urls = await self.scorer.score_search_results(
-                        company, search_results, session
-                    )
+                    # スコアリング実行（非同期対応の場合は適切に修正が必要）
+                    scored_urls = []
+                    for result in search_results:
+                        scored = self.scorer.calculate_score(result, company, pattern.name)
+                        if scored:
+                            scored_urls.append(scored)
                     
                     # ベストURL選択
-                    best_url = self.scorer.get_best_url(scored_urls) if scored_urls else None
+                    best_url = max(scored_urls, key=lambda x: x.total_score) if scored_urls else None
                     
                     # 結果保存
                     query_result = {
                         "pattern": pattern._asdict(),
+                        "query_text": query_text,
                         "search_results_count": len(search_results),
-                        "scored_urls": [self._serialize_url_score(score) for score in scored_urls],
-                        "best_url": self._serialize_url_score(best_url) if best_url else None
+                        "scored_urls": [self._serialize_hp_candidate(score) for score in scored_urls],
+                        "best_url": self._serialize_hp_candidate(best_url) if best_url else None
                     }
                     
                     company_result["query_results"].append(query_result)
                     all_scored_urls.extend(scored_urls)
                     
                     # 結果表示
-                    self._display_query_result(pattern, search_results, scored_urls, best_url)
+                    self._display_query_result(pattern, query_text, search_results, scored_urls, best_url)
                     
                 except Exception as e:
                     logger.error(f"  クエリテストエラー ({pattern.name}): {e}")
                     company_result["query_results"].append({
                         "pattern": pattern._asdict(),
+                        "query_text": "",
                         "search_results_count": 0,
                         "scored_urls": [],
                         "best_url": None,
@@ -231,7 +251,7 @@ class Phase1QueryTester:
             # 全クエリ中のベストURL
             if all_scored_urls:
                 best_overall = max(all_scored_urls, key=lambda x: x.total_score)
-                company_result["best_overall"] = self._serialize_url_score(best_overall)
+                company_result["best_overall"] = self._serialize_hp_candidate(best_overall)
                 logger.info(f"  🏆 全クエリ中のベスト: {best_overall.url} ({best_overall.total_score}点)")
             
             return company_result
@@ -250,9 +270,9 @@ class Phase1QueryTester:
                 "error": str(e)
             }
     
-    def _display_query_result(self, pattern, search_results, scored_urls, best_url):
+    def _display_query_result(self, pattern, query_text, search_results, scored_urls, best_url):
         """クエリ結果の表示"""
-        logger.info(f"    生成クエリ: {pattern.template}")
+        logger.info(f"    生成クエリ: {query_text}")
         logger.info(f"    検索結果数: {len(search_results)}")
         logger.info(f"    スコア計算後: {len(scored_urls)}")
         
@@ -263,26 +283,29 @@ class Phase1QueryTester:
             logger.info(f"    ドメイン類似度: {best_url.domain_similarity:.1f}%")
             
             # スコア内訳表示
-            if best_url.component_scores:
+            if best_url.score_details:
                 logger.info("    スコア内訳:")
-                for component, score in best_url.component_scores.items():
+                for component, score in best_url.score_details.items():
                     logger.info(f"      {component}: {score}")
         else:
             logger.warning("    有効なURLが見つかりませんでした")
     
-    def _serialize_url_score(self, url_score) -> Dict[str, Any]:
-        """URLScoreオブジェクトをシリアライズ"""
-        if not url_score:
+    def _serialize_hp_candidate(self, candidate) -> Dict[str, Any]:
+        """HPCandidateオブジェクトをシリアライズ"""
+        if not candidate:
             return None
         
         return {
-            "url": url_score.url,
-            "total_score": url_score.total_score,
-            "component_scores": url_score.component_scores,
-            "judgment": url_score.judgment,
-            "is_top_page": url_score.is_top_page,
-            "domain_similarity": url_score.domain_similarity,
-            "details": url_score.details
+            "url": candidate.url,
+            "title": candidate.title,
+            "description": candidate.description,
+            "search_rank": candidate.search_rank,
+            "query_pattern": candidate.query_pattern,
+            "domain_similarity": candidate.domain_similarity,
+            "is_top_page": candidate.is_top_page,
+            "total_score": candidate.total_score,
+            "judgment": candidate.judgment,
+            "score_details": candidate.score_details
         }
     
     def _generate_test_summary(self, test_results: List[Dict[str, Any]]) -> Dict[str, Any]:
