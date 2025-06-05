@@ -1,0 +1,149 @@
+# ブラックリスト・ペナルティリスト設定
+# 本ファイルをblacklist.yamlにコピーして使用してください
+
+# 除外対象ドメイン（完全一致で即除外）
+blacklist_domains:
+  # グルメ・口コミサイト
+  - "hotpepper.jp"
+  - "tabelog.com"
+  - "gurunavi.com" 
+  - "retty.me"
+  - "yelp.com"
+  - "foursquare.com"
+  
+  # 求人サイト
+  - "indeed.com"
+  - "mynavi.jp"
+  - "rikunabi.com"
+  - "jobinfo.jp"
+  - "doda.jp"
+  - "en-japan.com"
+  - "baitoru.com"
+  - "townwork.net"
+  
+  # 汎用ポータル・ディレクトリサイト
+  - "yahoo.co.jp"
+  - "google.com"
+  - "mapion.co.jp"
+  - "navitime.co.jp"
+  - "ekiten.jp"
+  - "itp.ne.jp"
+  
+  # SNS・ソーシャルメディア
+  - "facebook.com"
+  - "twitter.com"
+  - "instagram.com"
+  - "line.me"
+  - "ameblo.jp"
+  - "fc2.com"
+  
+  # ECモール・マーケットプレイス
+  - "amazon.co.jp"
+  - "rakuten.co.jp"
+  - "yahoo-shopping.jp"
+  - "mercari.com"
+  - "minne.com"
+  
+  # 不動産・住宅情報
+  - "suumo.jp"
+  - "homes.co.jp"
+  - "chintai.net"
+  - "athome.co.jp"
+  
+  # その他ポータル
+  - "wikipedia.org"
+  - "naver.jp"
+  - "cookpad.com"
+
+# URLパスペナルティ（該当する場合に減点）
+path_penalty_keywords:
+  # 求人関連
+  - "/recruit/"
+  - "/recruiting/"
+  - "/career/"
+  - "/careers/"
+  - "/jobs/"
+  - "/job/"
+  - "/kyujin/"
+  - "/saiyou/"
+  
+  # ブログ・ニュース関連
+  - "/blog/"
+  - "/blogs/"
+  - "/news/"
+  - "/articles/"
+  - "/article/"
+  - "/press/"
+  - "/information/"
+  - "/info/"
+  
+  # 多言語・地域特化ページ
+  - "/en/"
+  - "/english/"
+  - "/zh/"
+  - "/chinese/"
+  - "/kr/"
+  - "/korean/"
+  
+  # 特定サービスページ（トップページではない可能性が高い）
+  - "/menu/"
+  - "/price/"
+  - "/service/"
+  - "/products/"
+  - "/shop/"
+  - "/store/"
+  - "/access/"
+  - "/contact/"
+  - "/inquiry/"
+  
+  # イベント・キャンペーン
+  - "/event/"
+  - "/events/"
+  - "/campaign/"
+  - "/campaigns/"
+  
+  # その他非トップページ
+  - "/category/"
+  - "/archives/"
+  - "/tag/"
+  - "/tags/"
+  - "/search/"
+
+# 特定のサブドメインペナルティ
+subdomain_penalty_keywords:
+  - "blog."
+  - "news."
+  - "recruit."
+  - "career."
+  - "jobs."
+  - "shop."
+  - "store."
+  - "mobile."
+  - "m."
+
+# 除外するファイル拡張子
+excluded_file_extensions:
+  - ".pdf"
+  - ".doc"
+  - ".docx"
+  - ".xls"
+  - ".xlsx"
+  - ".ppt"
+  - ".pptx"
+  - ".zip"
+  - ".rar"
+  - ".jpg"
+  - ".jpeg"
+  - ".png"
+  - ".gif"
+  - ".mp4"
+  - ".mov"
+  - ".avi"
+
+# 除外するクエリパラメータを含むURL（動的コンテンツの可能性）
+excluded_query_patterns:
+  - "utm_"  # UTMパラメータ
+  - "?p="   # ページネーション
+  - "?page="
+  - "?id="
+  - "?search=" 

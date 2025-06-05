@@ -1,0 +1,89 @@
+# 会社HP自動検索・貼り付けツール - メイン設定ファイル
+# 本ファイルをconfig.yamlにコピーして使用してください
+
+# API設定
+brave_api:
+  api_key: "YOUR_BRAVE_SEARCH_API_KEY"  # 環境変数 BRAVE_SEARCH_API_KEY から読み込み推奨
+  results_per_query: 10  # 各クエリで取得する検索結果数
+  timeout_seconds: 30    # APIリクエストタイムアウト
+
+google_sheets:
+  service_account_file: "config/service_account.json"  # サービスアカウントJSONファイルのパス
+  input_spreadsheet_id: "YOUR_INPUT_SPREADSHEET_ID"
+  input_sheet_name: "Sheet1"
+  # 入力列のマッピング
+  input_columns:
+    id: "A"          # 企業ID
+    prefecture: "B"   # 都道府県
+    industry: "C"     # 業種
+    company_name: "D" # 店舗名
+    hp_url: "E"      # HP URL（処理対象は空欄）
+  # 出力列のマッピング
+  output_columns:
+    url: "E"      # 検出したHP URL
+    score: "F"    # 信頼度スコア
+    status: "G"   # 判定結果
+    query: "H"    # 使用クエリ
+
+# フェーズ3用スコアリングロジック設定
+scoring_logic:
+  # 各評価項目の重み付け
+  weights:
+    top_page_bonus: 5           # トップページ判定ボーナス
+    domain_exact_match: 5       # ドメイン完全一致
+    domain_similar_match: 3     # ドメイン類似度 (80%以上)
+    tld_co_jp: 3               # TLD (.co.jp)
+    tld_com_net: 1             # TLD (.com,.net等)
+    official_keyword_bonus: 2   # 公式キーワードボーナス
+    search_rank_bonus: 3        # 検索上位 (1-3位)
+    # 減点項目
+    path_depth_penalty_factor: -10  # トップページでない場合の減点/除外基準
+    domain_jp_penalty: -2           # .jp単独ドメインの減点
+    path_keyword_penalty: -2        # 求人・ブログ関連パスの減点
+  
+  # 判定閾値
+  thresholds:
+    auto_adopt: 9        # 自動採用 (9点以上)
+    needs_review: 6      # 要確認 (6-8点)
+                         # 手動確認 (5点以下)
+  
+  # 類似度計算の閾値
+  similarity_threshold_domain: 80  # ドメイン類似度の閾値 (%)
+
+# 非同期処理設定
+async_processing:
+  concurrent_searches: 10    # Brave APIへの同時リクエスト数 (最大20, API制限考慮)
+  request_delay_ms: 50       # 各Brave APIリクエスト間の最小遅延 (ミリ秒)
+  retry_attempts: 3          # APIリクエストのリトライ回数
+  backoff_factor: 2.0        # 指数バックオフの乗数
+
+# ログ設定
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  log_file_path: "./logs/app.log"
+  rotation_time: "midnight"     # 日次ローテーション
+  rotation_backup_count: 7      # 7日分のログを保持
+  structured_logging: true      # JSON形式での構造化ログ
+
+# フェーズ1用: クエリテストのパターン
+phase1_queries:
+  pattern_a: "{company_name} {industry} {prefecture}"
+  pattern_b: "\"{company_name}\" {prefecture} 公式サイト"
+  pattern_c: "\"{company_name}\" {industry} 公式 site:co.jp OR site:com"
+
+# 出力設定
+output:
+  # フェーズ1用出力設定
+  phase1_output_format: "csv"  # csv, txt, console
+  phase1_output_file: "./output/phase1_results.csv"
+  
+  # フェーズ3用出力設定
+  enable_spreadsheet_write: true
+  backup_csv: true
+  backup_csv_path: "./output/results_backup.csv"
+
+# デバッグ・開発設定
+debug:
+  enable_verbose_logging: false
+  save_html_content: false      # HTMLコンテンツをファイルに保存するか
+  mock_api_responses: false     # テスト用のAPIモック使用 

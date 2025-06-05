@@ -1,0 +1,22 @@
+# 検索クエリパターン設定
+# 本ファイルをquery_patterns.yamlにコピーして使用してください
+
+# フェーズ1用: 初期テスト用の3つのクエリパターン
+phase1_query_patterns:
+  pattern_a:
+    name: "基本情報組み合わせ"
+    template: "{company_name} {industry} {prefecture}"
+    description: "店舗名、業種、都道府県を組み合わせたベーシックな検索"
+    example: "Barber Boss ヘアサロン 大阪府"
+  
+  pattern_b:
+    name: "公式サイト明示"
+    template: "\"{company_name}\" {prefecture} 公式サイト"
+    description: "店舗名をクォートし、公式サイトを明示的に検索"
+    example: "\"Barber Boss\" 大阪府 公式サイト"
+  
+  pattern_c:
+    name: "ドメイン限定検索"
+    template: "\"{company_name}\" {industry} 公式 site:co.jp OR site:com"
+    description: "特定ドメインに限定した公式サイト検索"
+    example: "\"Barber Boss\" ヘアサロン 公式 site:co.jp OR site:com" 
