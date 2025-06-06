@@ -181,6 +181,14 @@ class BlacklistChecker:
         
         return domain in blacklist_domains
     
+    def get_blacklist_domains(self) -> set:
+        """ブラックリストドメインのセットを取得"""
+        if not self._blacklist_config:
+            self.load_blacklist()
+            
+        blacklist_domains = self._blacklist_config.get('blacklist_domains', [])
+        return set(blacklist_domains)
+    
     def get_path_penalty_score(self, url: str, penalty_value: int = -2) -> int:
         """URLパスのペナルティスコアを計算"""
         if not self._blacklist_config:

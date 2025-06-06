@@ -60,10 +60,13 @@ class HPScorer:
         self.penalty_paths = penalty_paths if penalty_paths is not None else []
         self.string_utils = StringUtils()
         self.url_utils = URLUtils()
+        
+        # pykakasi コンバータを初期化してキャッシュ（v2.0+ New API）
+        self._kks = pykakasi.kakasi()
     
     def _romanize(self, text: str) -> str:
         """
-        日本語をローマ字へ近似変換（簡易）
+        日本語をローマ字へ変換（pykakasi v2.0+ New API）
         
         Args:
             text: 変換対象の日本語文字列
@@ -75,9 +78,8 @@ class HPScorer:
             if not text:
                 return ""
             
-            # pykakasiを使用してローマ字変換
-            kks = pykakasi.kakasi()
-            result = kks.convert(text)
+            # v2.0+ New API: convertメソッドで辞書リストを取得
+            result = self._kks.convert(text)
             romanized = ''.join([item['hepburn'] for item in result])
             
             # 小文字に統一し、余分な空白を除去
@@ -140,17 +142,24 @@ class HPScorer:
             if cleaned_name:
                 candidates.append(cleaned_name)
             
-            # 2. ローマ字変換版
-            romanized_name = self._romanize(cleaned_name)
-            if romanized_name:
-                candidates.append(romanized_name)
+            # 2. ローマ字変換版（日本語がある場合のみ）
+            if re.search(r'[あ-んア-ヶー一-龯]', cleaned_name):
+                romanized_name = self._romanize(cleaned_name)
+                if romanized_name and romanized_name != cleaned_name.lower():
+                    candidates.append(romanized_name)
             
             # 3. カタカナ部分のみ抽出してローマ字変換
             katakana_only = self.string_utils.extract_katakana(company_name)
             if katakana_only:
                 romanized_katakana = self._romanize(katakana_only)
-                if romanized_katakana:
+                if romanized_katakana and romanized_katakana not in candidates:
                     candidates.append(romanized_katakana)
+                    
+            # 4. 英語の場合は小文字化した版も追加
+            if re.search(r'[a-zA-Z]', cleaned_name):
+                lower_name = cleaned_name.lower()
+                if lower_name not in candidates:
+                    candidates.append(lower_name)
             
             # 候補が空の場合は0を返す
             if not candidates:
@@ -364,27 +373,29 @@ def create_scorer_from_config(config: Dict[str, Any], blacklist_checker) -> HPSc
     """設定からHPScorerを作成するファクトリー関数"""
     try:
         # スコアリング設定の取得
-        scoring_config_dict = config.get('scoring', {})
+        scoring_logic = config.get('scoring_logic', {})
+        weights = scoring_logic.get('weights', {})
+        
         scoring_config = ScoringConfig(
-            top_page_bonus=scoring_config_dict.get('top_page_bonus', 5),
-            domain_exact_match=scoring_config_dict.get('domain_exact_match', 5),
-            domain_similar_match=scoring_config_dict.get('domain_similar_match', 3),
-            tld_co_jp=scoring_config_dict.get('tld_co_jp', 3),
-            tld_com_net=scoring_config_dict.get('tld_com_net', 1),
-            official_keyword_bonus=scoring_config_dict.get('official_keyword_bonus', 2),
-            search_rank_bonus=scoring_config_dict.get('search_rank_bonus', 3),
-            domain_jp_penalty=scoring_config_dict.get('domain_jp_penalty', -2),
-            path_keyword_penalty=scoring_config_dict.get('path_keyword_penalty', -2),
-            auto_adopt_threshold=scoring_config_dict.get('auto_adopt_threshold', 9),
-            needs_review_threshold=scoring_config_dict.get('needs_review_threshold', 6),
-            similarity_threshold_domain=scoring_config_dict.get('similarity_threshold_domain', 80)
+            top_page_bonus=weights.get('top_page', 5),
+            domain_exact_match=weights.get('domain_exact_match', 5),
+            domain_similar_match=weights.get('domain_similarity', 3),
+            tld_co_jp=weights.get('tld_co_jp', 3),
+            tld_com_net=weights.get('tld_com_net', 1),
+            official_keyword_bonus=weights.get('official_keyword', 2),
+            search_rank_bonus=weights.get('search_rank', 3),
+            domain_jp_penalty=weights.get('domain_jp_penalty', -2),
+            path_keyword_penalty=weights.get('path_penalty', -2),
+            auto_adopt_threshold=scoring_logic.get('auto_adopt_threshold', 9),
+            needs_review_threshold=scoring_logic.get('needs_review_threshold', 6),
+            similarity_threshold_domain=scoring_logic.get('similarity_threshold_domain', 80)
         )
         
         # ブラックリストドメインの取得
         blacklist_domains = blacklist_checker.get_blacklist_domains() if blacklist_checker else set()
         
         # ペナルティパスの取得
-        penalty_paths = config.get('scoring', {}).get('penalty_paths', [
+        penalty_paths = scoring_logic.get('penalty_paths', [
             'blog', 'news', 'recruit', 'contact', 'about'
         ])
         

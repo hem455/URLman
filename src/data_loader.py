@@ -218,10 +218,10 @@ class DataLoader:
         for i, row in enumerate(values):
             try:
                 # 必要な列のデータを取得（不足している場合は空文字列）
-                company_id = row[id_col] if len(row) > id_col else ""
-                prefecture = row[prefecture_col] if len(row) > prefecture_col else ""
-                industry = row[industry_col] if len(row) > industry_col else ""
-                company_name = row[company_name_col] if len(row) > company_name_col else ""
+                company_id = self._safe_str(row[id_col]) if len(row) > id_col else ""
+                prefecture = self._safe_str(row[prefecture_col]) if len(row) > prefecture_col else ""
+                industry = self._safe_str(row[industry_col]) if len(row) > industry_col else ""
+                company_name = self._safe_str(row[company_name_col]) if len(row) > company_name_col else ""
                 
                 # 必須フィールドのチェック
                 if not company_id.strip() or not company_name.strip():
@@ -243,6 +243,20 @@ class DataLoader:
                 continue
         
         return companies
+    
+    def _safe_str(self, value) -> str:
+        """
+        任意の値を安全に文字列に変換
+        
+        Args:
+            value: 変換する値（None、数値、文字列など）
+        
+        Returns:
+            文字列表現
+        """
+        if value is None:
+            return ""
+        return str(value)
     
     def _column_letter_to_index(self, column_letter: str) -> int:
         """

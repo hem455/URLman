@@ -62,7 +62,7 @@ class BraveSearchClient:
             params = {
                 'q': query,
                 'count': self.results_per_query,
-                'search_lang': 'ja',
+                'search_lang': 'jp',
                 'country': 'JP',
                 **kwargs
             }

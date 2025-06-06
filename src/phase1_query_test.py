@@ -37,7 +37,7 @@ class Phase1QueryTester:
         self.config_manager = ConfigManager(config)
         
         # 各コンポーネントを初期化
-        self.blacklist_checker = BlacklistChecker(config)
+        self.blacklist_checker = BlacklistChecker("config/blacklist.yaml")
         
         # Brave Search Client の初期化
         brave_api_config = config.get('brave_api', {})
